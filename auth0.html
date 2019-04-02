@@ -1,0 +1,148 @@
+<html lang="en">
+  <head>
+    <script src="https://cdn.auth0.com/js/lock/11.9.0/lock.min.js" async defer onload="auth0SsoInit()"></script>
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+  </head>
+  <body>
+    <script>
+      //https://medium.com/@darutk/new-architecture-of-oauth-2-0-and-openid-connect-implementation-18f408f9338d
+      //https://github.com/auth0/lock
+      //https://auth0.com/docs/libraries/lock/v11
+      //https://auth0.com/docs/quickstart/spa/vanillajs
+      //need to set up callback urls and allowed domains in auth0 settings
+      var clientId = "2n2A0evIhcFqCTksiaXv_mV7CsoEmujz";
+      var domain = "nzfsg.au.auth0.com";
+      var logouturl = 'https://dev20-mycrm.loanmarket.com.au/auth0.html';
+      var loginoptions = {
+          languageDictionary: {
+            title: "MyCRM"
+          },
+          closable: false,
+          auth: {
+            audience: 'https://testapi.nzfsg.co.nz',
+            responseType: 'token',
+            sso: true
+          }
+        };
+      var jwtToken = null;
+      var lock = null;
+
+      function auth0SsoInit(){
+        //initialise lock
+        //define lock onauth
+        //dispay userinfo
+        if (lock == null){
+          lock = new Auth0Lock(clientId, domain);
+          lock.on("authenticated", function(authResult) {
+            auth0SignedIn(authResult);
+            auth0GetUserInfo();
+          });
+        }
+        //auth0CheckSession();
+        auth0GetUserInfo();
+      }
+
+      /*function auth0CheckSession(){
+        lock.checkSession(loginoptions, function(err, authResult) {
+          if(err){
+            if (err.error == 'login_required')
+              auth0SignIn();
+            else
+              displayResult(JSON.stringify(err));
+            return;
+          }
+          auth0SignedIn(authResult);
+        });
+      }*/
+
+      function auth0SignIn(){
+        lock.show(loginoptions);
+      }
+
+      function auth0SignedIn(authResult){
+        if (lock == null)
+          auth0SsoInit();
+        lock.hide();
+        jwtToken = authResult.accessToken;
+      }
+
+      function auth0GetUserInfo(){
+        if (lock == null){
+          displayResult('error: auth0 not initiated');
+          return;
+        }
+        if (jwtToken == null){
+          auth0SignIn();
+          return;
+        }
+        lock.getUserInfo(jwtToken, function(err, profile) {
+          if (err) {
+            displayResult(JSON.stringify(err));
+            return;
+          }
+          displayResult("jwtToken: " + jwtToken + "<br />" + auth0DebugUserInfo(profile));
+        });
+      }
+
+      function auth0CallApi() {
+        if (lock == null)
+          auth0SsoInit();
+        if (jwtToken == null){
+          lock.show();
+          return;
+        }
+        displayResult('loading...');
+        // --------------- Authenticate section start ---------------------
+        // for any API calls, needs to authenticate using id_token, this should be in Authorization header instead of post param
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://testapi.nzfsg.co.nz/test/auth0-sso');
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        //xhr.setRequestHeader('Authorization', id_token);
+        xhr.onload = function() {
+          if (xhr.status == 200){
+            // do work with normal API response
+            displayResult('Success - ' + xhr.responseText);
+          }
+          else{
+            // re login
+            // 1. alert user, 2. save current url, 3. redirect for user to login, 4. after login return to saved url
+            displayResult('Fail - ' + xhr.responseText);
+            if (xhr.responseText.indexOf('JWT is not yet valid.') >= 0)
+              setTimeout(auth0CallApi, 1000);
+          }
+        };
+        xhr.send('jwttoken=' + jwtToken);
+        // --------------- Authenticate section end ---------------------
+      };
+
+      function auth0Logout(){
+        displayResult('loading...');
+        jwtToken = null;
+        if (lock == null){
+          displayResult("error - auth0 not initiated");
+          return;
+        }
+        lock.logout({
+          returnTo: logouturl
+        });
+        displayResult('logged out');
+      };
+
+      function auth0DebugUserInfo(profile){
+        if (profile==null)
+          return "no profile";
+        return JSON.stringify(profile);
+      }
+
+      function displayResult(msg){
+        document.getElementById('resultContent').innerHTML = msg;
+      };
+    </script>
+    <br /><br />
+    <a href="javascript:auth0CallApi();" style="font-size:18px;">Call API</a>
+    <br /><br />
+    <a href="javascript:auth0Logout();" style="font-size:18px;">Logout Auth0</a>
+    <br /><br />
+    <div id="resultContent"></div>
+  </body>
+</html>

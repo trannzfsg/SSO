@@ -1,0 +1,120 @@
+<html lang="en">
+  <head>
+    <script src="https://apis.google.com/js/platform.js?onload=googleSsoInit" async defer></script>
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+  </head>
+  <body>
+    <script>
+      //https://medium.com/@darutk/new-architecture-of-oauth-2-0-and-openid-connect-implementation-18f408f9338d
+      var jwtToken;
+      var googleAuth;
+      var googleUser;
+      function googleSsoInit(){
+        gapi.load('auth2', function() {
+          googleAuth = gapi.auth2.init({
+            client_id: '330911585295-nij9ase5m87i1hjhbr7571u8lc49dbf8.apps.googleusercontent.com'
+          });
+
+          googleAuth.then(
+            // Sign the user in, and then retrieve their ID.
+            function() {
+              displayResult('loading...');
+              if (googleAuth.isSignedIn.get()) {
+                googleUser = googleAuth.currentUser.get();
+                jwtToken = googleUser.getAuthResponse().id_token;
+                displayResult(googleDebugUserInfo());
+              }
+              else{
+                googleSignIn(function() {
+                  displayResult(googleDebugUserInfo());
+                });
+              }
+            }
+          );
+        });
+      }
+
+      function googleSignIn(callback) {
+        googleAuth.signIn({scope: 'profile email'}).then(function() {
+          googleUser = googleAuth.currentUser.get();
+
+          // The ID token you need to pass to your backend:
+          jwtToken = googleUser.getAuthResponse().id_token;
+
+          // Need to call MyCRM API after login to google to make sure the accounts (email) exists in MyCRM and is active. If not active or user doesn't exist, need to redirect user to another page to contact Loan Market to set up user account
+          //...
+          //...
+          //...
+          //...
+
+          // store jwtToken and other relevant info (e.g. email) in local storage for later use
+          //...
+          //...
+          //...
+          //...
+
+          callback();
+        });
+      };
+
+      function googleCallApi() {
+        if (jwtToken == null){
+          googleSignIn(googleCallApi);
+        }
+        displayResult('loading...');
+        // --------------- Authenticate section start ---------------------
+        // for any API calls, needs to authenticate using id_token, this should be in Authorization header instead of post param
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://testapi.nzfsg.co.nz/test/google-sso');
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        //xhr.setRequestHeader('Authorization', id_token);
+        xhr.onload = function() {
+          if (xhr.status == 200){
+            // do work with normal API response
+            displayResult('Success - ' + xhr.responseText);
+          }
+          else{
+            // re login
+            // 1. alert user, 2. save current url, 3. redirect for user to login, 4. after login return to saved url
+            displayResult('Fail - ' + xhr.responseText);
+            if (xhr.responseText.indexOf('JWT is not yet valid.') >= 0)
+              setTimeout(googleCallApi, 1000);
+          }
+        };
+        xhr.send('jwttoken=' + jwtToken);
+        // --------------- Authenticate section end ---------------------
+      };
+
+      function googleLogout(){
+        displayResult('loading...');
+        googleAuth.signOut().then(function () {
+          jwtToken = null;
+          displayResult('logged out');
+        });
+      };
+
+      function googleDebugUserInfo(){
+        var profile = googleUser.getBasicProfile();
+        var debug = '';
+        debug += '<br />ID: ' + profile.getId(); // Don't send this directly to your server!
+        debug += '<br />Full Name: ' + profile.getName();
+        debug += '<br />Given Name: ' + profile.getGivenName();
+        debug += '<br />Family Name: ' + profile.getFamilyName();
+        debug += '<br />Image URL: ' + profile.getImageUrl();
+        debug += '<br />Email: ' + profile.getEmail();
+        debug += '<br />ID Token: ' + (jwtToken ? jwtToken : '');
+        return debug;
+      }
+
+      function displayResult(msg){
+        document.getElementById('resultContent').innerHTML = msg;
+      };
+    </script>
+    <br /><br />
+    <a href="javascript:googleCallApi();" style="font-size:18px;">Call API</a>
+    <br /><br />
+    <a href="javascript:googleLogout();" style="font-size:18px;">Logout Google IDP (not google account)</a>
+    <br /><br />
+    <div id="resultContent"></div>
+  </body>
+</html>

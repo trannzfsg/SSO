@@ -1,0 +1,113 @@
+<html lang="en">
+  <head>
+    <script src="https://apis.google.com/js/client:platform.js?onload=googleSsoInit" async defer></script>
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+  </head>
+  <body>
+    <script>
+      /* 
+        documentation:
+        https://developers.google.com/identity/sign-in/web/server-side-flow
+        https://developers.google.com/identity/sign-in/web/reference
+        https://www.draw.io/#G1nHU_0Q4XYmN0YodAqdRHYVS7gyy2ZGzJ
+        https://github.com/googleplus/gplus-quickstart-csharp/blob/master/gplus-quickstart-csharp/signin.ashx.cs
+
+        client id: https://console.cloud.google.com/apis/credentials/oauthclient/330911585295-nij9ase5m87i1hjhbr7571u8lc49dbf8.apps.googleusercontent.com?project=mycrm-adviser-test&folder&organizationId=389580169724
+        
+        dev server used: https://dev20-mycrm.loanmarket.com.au/google.html
+        https://s3.console.aws.amazon.com/s3/buckets/dev20-mycrm.loanmarket.com/?region=ap-southeast-2&tab=overview#
+        
+        */
+      function googleSsoInit(){
+        gapi.load('auth2', function() {
+          var googleAuth = gapi.auth2.init({
+            client_id: '330911585295-nij9ase5m87i1hjhbr7571u8lc49dbf8.apps.googleusercontent.com',
+            scope: 'profile email'
+          });
+
+          googleAuth.then(
+            // Sign the user in, and then retrieve their ID.
+            function() {
+              if (localStorage.getItem('jwtToken') != null) {
+                displayResult('already logged in, toke is: ' + localStorage.getItem('jwtToken'));
+              }
+              else {
+                displayResult('loading...');
+                googleAuth.grantOfflineAccess().then(googleSignIn);
+              }
+            }
+          );
+        });
+      }
+
+      function googleSignIn(authResult) {
+        if (authResult['code']) {
+          displayResult(authResult['code']);
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', 'https://testapi.nzfsg.co.nz/test/google-sso-code');
+          xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=utf-8');
+          //xhr.setRequestHeader('Authorization', id_token);
+          xhr.onload = function() {
+            if (xhr.status == 200){
+              // do work with normal API response
+              displayResult('Success - ' + xhr.responseText);
+              //set jwtToken
+              localStorage.setItem('jwtToken', xhr.response.AccessToken);
+            }
+            else{
+              // re login
+              // 1. alert user, 2. save current url, 3. redirect for user to login, 4. after login return to saved url
+              displayResult('Fail - ' + xhr.responseText);
+            }
+          };
+          xhr.send('code=' + authResult['code']);
+        }
+      };
+
+      function googleCallApi() {
+        displayResult('loading...');
+        // --------------- Authenticate section start ---------------------
+        // for any API calls, needs to authenticate using id_token, this should be in Authorization header instead of post param
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://testapi.nzfsg.co.nz/test/google-sso');
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        //xhr.setRequestHeader('Authorization', id_token);
+        xhr.onload = function() {
+          if (xhr.status == 200){
+            // do work with normal API response
+            displayResult('Success - ' + xhr.responseText);
+          }
+          else{
+            // re login
+            // 1. alert user, 2. save current url, 3. redirect for user to login, 4. after login return to saved url
+            displayResult('Fail - ' + xhr.responseText);
+          }
+        };
+        xhr.send('jwtToken=' + localStorage.getItem('jwtToken'));
+        // --------------- Authenticate section end ---------------------
+      };
+
+      function googleLogout(){
+        displayResult('loading...');
+        localStorage.setItem('jwtToken', null);
+        //log out of google
+
+
+
+
+
+        displayResult('logged out');
+      };
+
+      function displayResult(msg){
+        document.getElementById('resultContent').innerHTML = msg;
+      };
+    </script>
+    <br /><br />
+    <a href="javascript:googleCallApi();" style="font-size:18px;">Call API</a>
+    <br /><br />
+    <a href="javascript:googleLogout();" style="font-size:18px;">Logout Google</a>
+    <br /><br />
+    <div id="resultContent"></div>
+  </body>
+</html>
